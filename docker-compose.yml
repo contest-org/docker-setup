@@ -1,0 +1,79 @@
+version: '3'
+
+services:
+  backend:
+    build:
+      context: ../authentication
+      dockerfile: Dockerfile
+    container_name: symfony_authentication_backend
+    ports:
+      - "8000:80"
+    volumes:
+      - '../authentication/symfony:/var/www/html/symfony'
+      - '../authentication/php/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini:ro'
+    networks:
+      - app-network
+    working_dir: '/var/www/html/symfony'
+    environment:
+      APP_ENV: dev
+      COMPOSER_MEMORY_LIMIT: 2G
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      - composer_build
+
+  frontend:
+    build:
+      context: ../frontend-authentication
+      dockerfile: Dockerfile
+    container_name: vue_authentication_frontend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../frontend-authentication:/app
+    networks:
+      - app-network
+
+  composer_build:
+    image: composer:latest
+    container_name: composer_build
+    working_dir: '/var/www/html/symfony'
+    volumes:
+      - '../authentication/symfony:/var/www/html/symfony'
+    command: ["composer", "install"]
+    networks:
+      - app-network
+
+  nginx:
+    container_name: 'nginx'
+    image: nginx:1.23.2-alpine
+    networks:
+      - app-network
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+    volumes:
+      - '.:/var/www/html'
+      - '../authentication/nginx/conf.d/default.nginx:/etc/nginx/conf.d/default.conf'
+
+  postgres:
+    container_name: 'pg'
+    image: postgres:15.1-alpine
+    networks:
+      - app-network
+    ports:
+      - "5432:5432"
+    working_dir: /app
+    restart: always
+    environment:
+      POSTGRES_DB: 'contest'
+      POSTGRES_USER: 'devuser'
+      POSTGRES_PASSWORD: 'devuser'
+    volumes:
+      - ./db/dump:/app/dump
+      - ./db/postgresql:/var/lib/postgresql/data
+
+networks:
+  app-network:
+    driver: bridge
